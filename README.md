@@ -109,4 +109,5 @@ When submitting on Google Classroom (GCR):
 ✔ Invalid/self-signed cert rejected (`BAD_CERT`)  
 ✔ Tamper test → signature verification fails (`SIG_FAIL`)  
 ✔ Replay test → rejected by seqno (`REPLAY`)  
-✔ Non-repudiation → exported transcript + signed SessionReceipt verified offline  
+✔ Non-repudiation → exported transcript + signed SessionReceipt verified offline 
+
