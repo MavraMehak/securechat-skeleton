@@ -271,7 +271,6 @@ def handle_connection(conn: socket.socket, addr, expect_client_cn: str):
                         pub = peer_cert_obj.public_key()
                         try:
                             sig_bytes = base64.b64decode(sig_b64)
-                            sig_bytes = sig_bytes[:-1] + b'\xFF'  # corrupt last byte
                             sig_b64_corrupted = base64.b64encode(sig_bytes).decode()
                         except:
                             sig_b64_corrupted = sig_b64 + "A"  # fallback
