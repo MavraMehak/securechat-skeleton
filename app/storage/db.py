@@ -2,21 +2,23 @@
 
 #!/usr/bin/env python3
 import os
+import sys
+import argparse
 import secrets
 import hashlib
 import hmac
 from typing import Optional, Dict
 
 import pymysql
-from pymysql.err import IntegrityError, OperationalError
+from pymysql.err import IntegrityError
 from dotenv import load_dotenv
 
-load_dotenv()  # reads .env in project root
+load_dotenv()  
 
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")  
 DB_NAME = os.getenv("DB_NAME", "securechat")
 
 
@@ -45,14 +47,15 @@ def init_db():
     Run this once during setup (or at server start).
     """
     create_db_sql = f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-    create_table_sql = """
+    create_users_table_sql = """
     CREATE TABLE IF NOT EXISTS users (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      email VARCHAR(255) NOT NULL,
-      username VARCHAR(255) NOT NULL UNIQUE,
-      salt VARBINARY(16) NOT NULL,
-      pwd_hash CHAR(64) NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        username VARCHAR(255) NOT NULL UNIQUE,
+        salt VARBINARY(16) NOT NULL,
+        pwd_hash CHAR(64) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY (email)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
 
@@ -68,53 +71,44 @@ def init_db():
     conn = _get_conn(connect_db=True)
     try:
         with conn.cursor() as cur:
-            cur.execute(create_table_sql)
+            cur.execute(create_users_table_sql)
+        print("Database + users table initialized.")
     finally:
         conn.close()
 
 
 def _hash_pwd(salt: bytes, password: str) -> str:
     """
-    Return hex(SHA256(salt || password)).
-    salt: raw bytes (16 bytes)
-    password: string (UTF-8)
-    result: 64-char hex string
+    Compute hex SHA256(salt || password)
     """
     if isinstance(password, str):
         password_bytes = password.encode("utf-8")
-    else:
-        password_bytes = password
+
     digest = hashlib.sha256(salt + password_bytes).hexdigest()
     return digest
 
 
-def register_user(email: str, username: str, password: str) -> bool:
+def register_user(email: str, username: str, pwd_hash: str, salt: bytes) -> bool:
     """
     Register a new user.
     - Generates a 16-byte random salt (server-side).
     - Computes pwd_hash = hex(SHA256(salt || password))
     - Stores (email, username, salt, pwd_hash)
     Returns True on success, False if username/email already exists.
-    Raises on other DB errors.
     """
-    if not (email and username and password):
+    if not (email and username and pwd_hash):
         raise ValueError("email, username and password are required")
-
-    salt = secrets.token_bytes(16)
-    pwd_hash = _hash_pwd(salt, password)
 
     sql = "INSERT INTO users (email, username, salt, pwd_hash) VALUES (%s, %s, %s, %s);"
 
     conn = _get_conn()
     try:
         with conn.cursor() as cur:
-            try:
-                cur.execute(sql, (email, username, salt, pwd_hash))
-                return True
-            except IntegrityError as e:
-                # IntegrityError for unique constraint violation (username)
-                # Could also check for duplicate email by querying first if you prefer.
-                return False
+            cur.execute(sql, (email, username, salt, pwd_hash))
+            return True
+    except IntegrityError as e:
+        # Duplicate username/mail
+        return False
     finally:
         conn.close()
 
@@ -129,8 +123,7 @@ def get_user_by_username_or_email(identifier: str) -> Optional[Dict]:
     try:
         with conn.cursor() as cur:
             cur.execute(sql, (identifier, identifier))
-            row = cur.fetchone()
-            return row
+            return cur.fetchone() 
     finally:
         conn.close()
 
@@ -145,7 +138,7 @@ def verify_user(identifier: str, password: str) -> bool:
     """
     user = get_user_by_username_or_email(identifier)
     if not user:
-        # Do a fake hash to mitigate timing attacks for non-existent users
+        # fake hash
         fake_salt = b"\x00" * 16
         _ = _hash_pwd(fake_salt, password)
         return False
@@ -153,5 +146,20 @@ def verify_user(identifier: str, password: str) -> bool:
     salt = user["salt"]
     stored = user["pwd_hash"]
     computed = _hash_pwd(salt, password)
-    # constant-time compare
+
     return hmac.compare_digest(stored, computed)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--init", action="store_true",
+                        help="Initialize DB and users table")
+    args = parser.parse_args()
+
+    if args.init:
+        init_db()
+    else:
+        print("Usage:\n  python -m app.storage.db --init")
+
+
+if __name__ == "__main__":
+    main()

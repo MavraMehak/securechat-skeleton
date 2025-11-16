@@ -54,6 +54,7 @@ securechat-skeleton/
 2. **Set up environment**:
    ```bash
    python3 -m venv .venv && source .venv/bin/activate
+   .\.venv\Scripts\Activate.ps1
    pip install -r requirements.txt
    cp .env.example .env
    ```
