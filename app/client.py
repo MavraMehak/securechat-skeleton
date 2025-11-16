@@ -160,7 +160,7 @@ def main():
         if msg.get("type") != "server_hello":
             print("Expected server_hello")
             return
-
+            
         server_cert_pem = msg["cert"]
         nonce_server = msg.get("nonce")
         if not nonce_server:
@@ -260,8 +260,7 @@ def main():
             sig_b64 = sign_bytes_rsa(our_private_key, msg_bytes)
             send_msg(sock, {
                 "type": "msg",
-                #"seqno": send_seq,
-                "seqno": 0, # Replay
+                "seqno": send_seq,
                 "ts": ts,
                 "iv": iv_b64,
                 "ct": ct_b64,
