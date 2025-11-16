@@ -160,6 +160,7 @@ def main():
         if msg.get("type") != "server_hello":
             print("Expected server_hello")
             return
+            
         server_cert_pem = msg["cert"]
         nonce_server = msg.get("nonce")
         if not nonce_server:
